@@ -217,7 +217,7 @@ async def _extract_text_from_file(file_data: bytes, file_name: str) -> list[dict
     if ext == "pdf":
         import fitz
         doc = fitz.open(stream=file_data, filetype="pdf")
-        for i, page in enumerate(doc):
+        for i, page in enumerate(doc):  # type: ignore[arg-type]
             pages_data.append({"content": (page.get_text() or "").strip(), "page_number": i + 1})
         doc.close()
         return pages_data
@@ -242,7 +242,7 @@ async def _extract_text_from_file(file_data: bytes, file_name: str) -> list[dict
     import tempfile
 
     try:
-        from content_core import extract_content
+        from content_core.content.extraction import extract_content
         suffix = f".{ext}" if ext else ""
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(file_data)
@@ -266,7 +266,7 @@ async def _extract_text_from_file(file_data: bytes, file_name: str) -> list[dict
 async def _extract_text_from_url(url: str) -> list[dict]:
     """Extract text from a URL — markdown output preferred."""
     try:
-        from content_core import extract_content
+        from content_core.content.extraction import extract_content
         result = await extract_content({"url": url, "output_format": "markdown"})
         return [{"content": result.content or "", "page_number": 1}]
     except Exception as e:

@@ -20,7 +20,7 @@ from app.worker import get_arq_pool
 
 class SkillService:
     @staticmethod
-    async def validate_zip_content(file_data: bytes, zip_name: str) -> str:
+    async def validate_zip_content(file_data: bytes, zip_name: str) -> Optional[str]:
         """Validates ZIP and extracts README. Returns error message if invalid, None if valid."""
         try:
             with zipfile.ZipFile(io.BytesIO(file_data)) as zf:
@@ -299,7 +299,7 @@ class SkillService:
 
         stmt = stmt.limit(limit)
         res = await db.execute(stmt)
-        return res.scalars().unique().all(), total
+        return list(res.scalars().unique().all()), total
 
     @staticmethod
     async def bulk_delete_skills(db: AsyncSession, ids: List[uuid.UUID]) -> int:
@@ -366,7 +366,7 @@ class SkillService:
         skill = await SkillService.get_skill(db, slug)
         stmt = select(SkillVersion).where(SkillVersion.skill_id == skill.id).order_by(SkillVersion.version_number.desc())
         res = await db.execute(stmt)
-        return res.scalars().all()
+        return list(res.scalars().all())
 
     @staticmethod
     async def set_latest_version(db: AsyncSession, slug: str, version_number: int) -> Skill:

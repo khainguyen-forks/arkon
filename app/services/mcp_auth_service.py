@@ -215,7 +215,7 @@ class MCPAuthService:
         )
         result = await self.db.execute(stmt)
         await self.db.flush()
-        return result.rowcount > 0
+        return (result.rowcount or 0) > 0  # type: ignore[union-attr]
 
 
 def apply_scope_filter(query, identity: ResolvedIdentity):

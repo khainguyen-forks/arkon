@@ -106,7 +106,7 @@ class StorageService:
         self.client.put_object(
             bucket_name=bucket,
             object_name=object_name,
-            data=stream,
+            data=stream,  # type: ignore[arg-type]
             length=length,
             content_type=content_type,
         )
@@ -151,7 +151,8 @@ class StorageService:
         """Delete all objects with a given prefix (e.g. a source's files)."""
         objects = self.client.list_objects(settings.minio_bucket, prefix=prefix, recursive=True)
         for obj in objects:
-            self.client.remove_object(settings.minio_bucket, obj.object_name)
+            if obj.object_name:
+                self.client.remove_object(settings.minio_bucket, obj.object_name)
         logger.debug(f"Deleted all objects with prefix: {prefix}")
 
 

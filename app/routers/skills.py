@@ -68,6 +68,7 @@ class SkillBulkVisibilityRequest(BaseModel):
     skill_ids: List[uuid.UUID]
     scope_type: str
     scope_id: Optional[uuid.UUID] = None
+    department_id: Optional[uuid.UUID] = None  # Legacy single department
     department_ids: Optional[List[uuid.UUID]] = None  # Legacy support
 
 
@@ -304,7 +305,7 @@ async def list_skill_files(
     files = []
     for obj in objects:
         # Extract relative path from full object name
-        rel_path = obj.object_name.replace(prefix_for_list, "", 1)
+        rel_path = (obj.object_name or "").replace(prefix_for_list, "", 1)
         if not rel_path:
             continue
         

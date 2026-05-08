@@ -221,7 +221,7 @@ async def list_pages(
     if page_type:
         stmt = stmt.where(WikiPage.page_type == page_type)
     if knowledge_type_slug:
-        stmt = stmt.where(WikiPage.knowledge_type_slugs.any(knowledge_type_slug))
+        stmt = stmt.where(WikiPage.knowledge_type_slugs.any(knowledge_type_slug))  # type: ignore[arg-type]
     if allowed_kt_slugs:
         stmt = stmt.where(
             or_(
@@ -583,7 +583,7 @@ async def detach_source_from_wiki(
 
     Returns the number of pages deleted.
     """
-    stmt = select(WikiPage).where(WikiPage.source_ids.any(source_id))
+    stmt = select(WikiPage).where(WikiPage.source_ids.any(source_id))  # type: ignore[arg-type]
     pages = list((await session.execute(stmt)).scalars().all())
     deleted_count = 0
     for page in pages:

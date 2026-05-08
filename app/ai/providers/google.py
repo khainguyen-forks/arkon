@@ -52,7 +52,7 @@ class GoogleEmbedding(EmbeddingProvider):
                 output_dimensionality=self.dimensions,
             ),
         )
-        return list(result.embeddings[0].values)
+        return list(result.embeddings[0].values)  # type: ignore[index,union-attr]
 
     async def embed_batch(
         self, texts: list[str], concurrency: int = 5
@@ -162,9 +162,9 @@ class GoogleLLM(LLMProvider):
             system_instruction=system,
             max_output_tokens=max_tokens,
             temperature=temperature,
-            tools=gemini_tools,
+            tools=gemini_tools,  # type: ignore[arg-type]
             tool_config=gtypes.ToolConfig(
-                function_calling_config=gtypes.FunctionCallingConfig(mode="AUTO")
+                function_calling_config=gtypes.FunctionCallingConfig(mode="AUTO")  # type: ignore[arg-type]
             ),
         )
 
@@ -178,7 +178,7 @@ class GoogleLLM(LLMProvider):
         tool_calls: list[ToolCall] = []
 
         if response.candidates:
-            for part in response.candidates[0].content.parts:
+            for part in (response.candidates[0].content.parts or []):  # type: ignore[union-attr]
                 if hasattr(part, "text") and part.text:
                     text_parts.append(part.text)
                 elif hasattr(part, "function_call") and part.function_call:
@@ -186,7 +186,7 @@ class GoogleLLM(LLMProvider):
                     args = dict(fc.args) if fc.args else {}
                     # Gemini doesn't assign IDs — generate a stable one
                     tc_id = f"fc_{fc.name}_{uuid.uuid4().hex[:8]}"
-                    tool_calls.append(ToolCall(id=tc_id, name=fc.name, arguments=args))
+                    tool_calls.append(ToolCall(id=tc_id, name=fc.name or "", arguments=args))
 
         finish_reason = "tool_use" if tool_calls else "end_turn"
         if response.candidates:

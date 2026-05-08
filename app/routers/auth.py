@@ -7,6 +7,8 @@ Two system roles:
 """
 
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -87,7 +89,7 @@ async def _get_workspace_memberships(db, employee_id) -> list[WorkspaceMembershi
     ]
 
 
-def _build_user_dict(employee: Employee, permissions: list[str], workspace_memberships: list = None) -> dict:
+def _build_user_dict(employee: Employee, permissions: list[str], workspace_memberships: Optional[list] = None) -> dict:
     """Build user dict for login/me responses."""
     return {
         "id": str(employee.id),

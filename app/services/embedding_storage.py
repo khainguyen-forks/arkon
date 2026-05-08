@@ -98,7 +98,7 @@ async def cleanup_stale_embeddings(
         result = await session.execute(
             delete(Model).where(Model.model_spec_id != keep_spec_id)
         )
-        total += result.rowcount or 0
+        total += result.rowcount or 0  # type: ignore[union-attr]
     return total
 
 

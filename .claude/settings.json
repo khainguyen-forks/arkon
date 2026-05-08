@@ -27,7 +27,8 @@
       "Bash(Get-ChildItem -Path \"D:\\\\arkon\\\\frontend\\\\src\" -Recurse -Filter \"*auth*\" -File)",
       "Bash(rtk docker *)",
       "Bash(rtk pytest *)",
-      "Bash(rtk ruff *)"
+      "Bash(rtk ruff *)",
+      "Bash(rtk npx *)"
     ]
   },
   "enabledPlugins": {

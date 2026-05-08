@@ -97,7 +97,7 @@ class SourceUpdate(BaseModel):
 
 async def _wiki_page_count(session: AsyncSession, source_id: uuid.UUID) -> int:
     """How many wiki pages reference this source in their source_ids array."""
-    stmt = select(func.count()).select_from(WikiPage).where(WikiPage.source_ids.any(source_id))
+    stmt = select(func.count()).select_from(WikiPage).where(WikiPage.source_ids.any(source_id))  # type: ignore[arg-type]
     return (await session.execute(stmt)).scalar_one()
 
 
@@ -258,10 +258,7 @@ async def get_source(
     if source.minio_key:
         try:
             from app.services.storage_service import storage_service
-            download_url = storage_service.get_download_url(
-                source.minio_key,
-                expires_seconds=3600,
-            )
+            download_url = storage_service.get_presigned_url(source.minio_key)
         except Exception:
             pass
 
@@ -370,7 +367,8 @@ async def upload_source(
     job = await pool.enqueue_job(
         "ingest_file_task", str(source.id),
     )
-    source.job_id = job.job_id
+    if job:
+        source.job_id = job.job_id
     await db.commit()
 
     source = (await db.execute(
@@ -379,7 +377,7 @@ async def upload_source(
         .where(Source.id == source.id)
     )).scalar_one()
 
-    logger.info(f"Enqueued ingestion job {job.job_id} for source {source.id}")
+    logger.info(f"Enqueued ingestion job {job.job_id if job else 'N/A'} for source {source.id}")
     return _to_response(source)
 
 
@@ -415,7 +413,8 @@ async def add_url_source(
 
     pool = await get_arq_pool()
     job = await pool.enqueue_job("ingest_url_task", str(source.id))
-    source.job_id = job.job_id
+    if job:
+        source.job_id = job.job_id
     await db.commit()
 
     source = (await db.execute(
@@ -424,7 +423,7 @@ async def add_url_source(
         .where(Source.id == source.id)
     )).scalar_one()
 
-    logger.info(f"Enqueued URL ingestion job {job.job_id} for source {source.id}")
+    logger.info(f"Enqueued URL ingestion job {job.job_id if job else 'N/A'} for source {source.id}")
     return _to_response(source)
 
 
@@ -503,7 +502,8 @@ async def retry_source(
     task_name = "ingest_url_task" if source.source_type == "url" else "ingest_file_task"
     job = await pool.enqueue_job(task_name, str(source_id))
 
-    source.job_id = job.job_id
+    if job:
+        source.job_id = job.job_id
     await db.commit()
     await db.refresh(source)
 
@@ -512,7 +512,7 @@ async def retry_source(
         .options(*_source_load_options())
         .where(Source.id == source_id)
     )).scalar_one()
-    logger.info(f"Queued retry job {job.job_id} for source {source_id}")
+    logger.info(f"Queued retry job {job.job_id if job else 'N/A'} for source {source_id}")
     return _to_response(source)
 
 

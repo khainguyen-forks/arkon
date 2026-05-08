@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.embedding_catalog import (
@@ -251,7 +251,7 @@ async def switch_embedding_model(
         # Mark job as failed so the UI doesn't poll forever.
         async with db.begin():
             await db.execute(
-                EmbeddingJob.__table__.update()
+                update(EmbeddingJob)
                 .where(EmbeddingJob.id == job_id)
                 .values(status="failed", error_message=f"Enqueue failed: {e}")
             )

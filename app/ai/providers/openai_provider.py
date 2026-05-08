@@ -48,7 +48,7 @@ class OpenAIEmbedding(EmbeddingProvider):
         return self._client
 
     async def embed(self, text: str) -> list[float]:
-        kwargs = {
+        kwargs: dict = {
             "model": self.config.model_id,
             "input": text,
         }

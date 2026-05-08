@@ -6,7 +6,7 @@ Sensitive values (API keys, tokens) are encrypted at rest with Fernet.
 
 import base64
 import hashlib
-from typing import Optional
+from typing import Any, Optional
 
 from cryptography.fernet import Fernet
 from loguru import logger
@@ -164,7 +164,7 @@ class ConfigService:
             result[key] = await self.get(key)
         return result
 
-    async def get_all_for_ui(self) -> dict[str, any]:
+    async def get_all_for_ui(self) -> dict[str, Any]:
         """Get all config values, masking sensitive ones for UI display."""
         all_config = await self.get_all()
         ui_config = {}

@@ -322,6 +322,7 @@ async def compile_source_with_agent(
 
     messages: list[dict] = [{"role": "user", "content": initial_msg}]
 
+    step = -1
     for step in range(MAX_STEPS):
         try:
             turn: AssistantTurn = await asyncio.wait_for(

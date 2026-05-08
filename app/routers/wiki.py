@@ -155,7 +155,7 @@ async def list_wiki_pages(
     if page_type:
         stmt = stmt.where(WikiPage.page_type == page_type)
     if knowledge_type_slug:
-        stmt = stmt.where(WikiPage.knowledge_type_slugs.any(knowledge_type_slug))
+        stmt = stmt.where(WikiPage.knowledge_type_slugs.any(knowledge_type_slug))  # type: ignore[arg-type]
 
     result = await db.execute(stmt)
     return [_summary(p) for p in result.scalars().all()]

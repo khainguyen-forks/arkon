@@ -601,7 +601,8 @@ async def upload_workspace_source(
 
     pool = await _get_arq_pool()
     job = await pool.enqueue_job("ingest_file_task", str(source.id))
-    source.job_id = job.job_id
+    if job:
+        source.job_id = job.job_id
     await db.commit()
 
     return {
@@ -649,7 +650,8 @@ async def add_workspace_url_source(
 
     pool = await _get_arq_pool()
     job = await pool.enqueue_job("ingest_url_task", str(source.id))
-    source.job_id = job.job_id
+    if job:
+        source.job_id = job.job_id
     await db.commit()
 
     return {
