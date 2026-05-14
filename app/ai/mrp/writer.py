@@ -210,68 +210,33 @@ Each page must be a proper encyclopedic article, NOT a flat bullet list:
 - Do NOT invent image UUIDs.
 """
 
-SOURCE_CONTEXT_FALLBACK_CHARS = 60_000  # fallback when model is unknown
-
-# Approximate context windows for known models (in tokens).
-# We use ~60% of input window for source text, leaving room for
-# system prompt, evidence blocks, and output tokens.
-# 1 token ≈ 4 chars (English), conservative estimate.
-# Last updated: 2026-05-11
-_MODEL_CONTEXT_TOKENS: dict[str, int] = {
-    # Google Gemini — all 1M context
-    "gemini-3.1-pro": 1_000_000,
-    "gemini-3.1-flash": 1_000_000,
-    "gemini-3.0-flash": 1_000_000,
-    "gemini-2.5-flash": 1_000_000,
-    "gemini-2.5-pro": 1_000_000,
-    "gemini-2.0-flash": 1_000_000,
-    # OpenAI GPT-5.x
-    "gpt-5.5-instant": 1_000_000,
-    "gpt-5.4": 1_000_000,
-    "gpt-5.2": 256_000,
-    # OpenAI GPT-4.x (legacy but still used)
-    "gpt-4.1-mini": 1_000_000,
-    "gpt-4.1-nano": 1_000_000,
-    "gpt-4o": 128_000,
-    "gpt-4o-mini": 128_000,
-    # Anthropic Claude 4.x — all 1M context
-    "claude-4.7-opus": 1_000_000,
-    "claude-4.6-sonnet": 1_000_000,
-    "claude-sonnet-4-20250514": 1_000_000,
-    "claude-haiku-4-20250514": 200_000,
-}
+SOURCE_CONTEXT_FALLBACK_CHARS = 60_000  # fallback when no spec is available
 
 # Source text gets 60% of the context budget; the rest is for system prompt,
 # evidence blocks, existing content, and output tokens.
 _SOURCE_BUDGET_RATIO = 0.60
 _CHARS_PER_TOKEN = 4  # conservative estimate
+_MAX_BUDGET_CHARS = 800_000  # cap to avoid diminishing returns on huge contexts
 
 
-def _get_source_context_budget(model_id: str | None) -> int:
+def _get_source_context_budget(llm: Optional[LLMProvider]) -> int:
     """
     Calculate the maximum chars allowed for source context based on the
-    model's context window. Falls back to SOURCE_CONTEXT_FALLBACK_CHARS
-    if the model is unknown.
+    model's context window. Reads `context_window_tokens` from the LLM
+    provider's catalog spec (config.spec). Falls back to a 60k-char limit
+    when no spec is attached — that signals the model was loaded outside
+    the catalog and we have no metadata.
     """
-    if not model_id:
+    if llm is None:
         return SOURCE_CONTEXT_FALLBACK_CHARS
 
-    # Try exact match first, then prefix match for versioned models
-    ctx_tokens = _MODEL_CONTEXT_TOKENS.get(model_id)
-    if ctx_tokens is None:
-        for key, val in _MODEL_CONTEXT_TOKENS.items():
-            if model_id.startswith(key):
-                ctx_tokens = val
-                break
-
-    if ctx_tokens is None:
+    spec = getattr(llm.config, "spec", None)
+    ctx_tokens = getattr(spec, "context_window_tokens", None) if spec else None
+    if not ctx_tokens:
         return SOURCE_CONTEXT_FALLBACK_CHARS
 
     budget_chars = int(ctx_tokens * _CHARS_PER_TOKEN * _SOURCE_BUDGET_RATIO)
-
-    # Cap at 800k chars (~200k tokens) — beyond this, diminishing returns
-    # and most LLMs struggle with very long context anyway.
-    return min(budget_chars, 800_000)
+    return min(budget_chars, _MAX_BUDGET_CHARS)
 
 
 # ---------------------------------------------------------------------------
@@ -281,21 +246,20 @@ def _get_source_context_budget(model_id: str | None) -> int:
 def _build_source_context(
     full_text: str,
     evidence: list[dict],
-    model_id: str | None = None,
+    llm: Optional[LLMProvider] = None,
 ) -> str:
     """
     Build source context for the writer.
 
-    Budget is dynamically calculated based on the model's context window:
-      - gemini-2.5-flash (1M tokens) → up to ~800k chars of source
-      - gpt-4o (128k tokens)         → up to ~307k chars
-      - unknown model                → 60k chars fallback
+    Budget is calculated from llm.config.spec.context_window_tokens (~60%
+    of context budgeted for source text). Models without a catalog spec
+    fall back to a 60k-char cap.
 
     For short documents (fits in budget): include the full text.
     For long documents: smart extraction — section-level relevance scoring
     based on evidence density, with full sections preserved for coherence.
     """
-    budget = _get_source_context_budget(model_id)
+    budget = _get_source_context_budget(llm)
 
     if len(full_text) <= budget:
         return full_text
@@ -351,9 +315,10 @@ def _build_source_context(
     if total < len(full_text):
         parts.append(f"\n\n[…document continues… total {len(full_text)} chars, showing {total}…]")
 
+    spec_id = getattr(getattr(llm, "config", None), "extra", {}).get("spec_id") if llm else None
     logger.info(
         f"MRP WRITER source context: {len(full_text)} chars → {total} chars "
-        f"({total*100//len(full_text)}%), budget={budget}, model={model_id}"
+        f"({total*100//len(full_text)}%), budget={budget}, spec={spec_id}"
     )
 
     return "".join(parts)
@@ -681,7 +646,7 @@ async def _write_page_complex(
     slugs_list = "\n".join(f"- [[{s}]]" for s in available) if available else "(none)"
 
     # Build source context
-    source_context = _build_source_context(full_text, evidence, model_id=llm.config.model_id)
+    source_context = _build_source_context(full_text, evidence, llm=llm)
 
     image_markers = _collect_relevant_image_markers(evidence, full_text)
     image_section = ""
@@ -853,7 +818,7 @@ async def run_refine_phase(
             )
 
             # Build source context for the writer
-            source_context = _build_source_context(full_text, evidence, model_id=llm.config.model_id)
+            source_context = _build_source_context(full_text, evidence, llm=llm)
             image_markers = _collect_relevant_image_markers(evidence, full_text)
 
             try:
