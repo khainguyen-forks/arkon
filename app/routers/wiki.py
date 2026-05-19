@@ -253,8 +253,8 @@ async def get_wiki_page(
                 if user.department_id != page.scope_id:
                     raise HTTPException(403, "Access denied — this page belongs to another department")
 
-    backlinks = await wiki_service.get_backlinks(db, slug)
-    outlinks = await wiki_service.get_outlinks(db, slug)
+    backlinks = await wiki_service.get_backlinks(db, slug, page.scope_type, page.scope_id)
+    outlinks = await wiki_service.get_outlinks(db, slug, page.scope_type or "global", page.scope_id)
     return _detail(page, backlinks, outlinks)
 
 
@@ -380,11 +380,20 @@ async def direct_edit_wiki_page(
 
     await wiki_service.direct_edit_page(db, page, user.id, body.content_md, body.change_note)
     await log_audit(db, user, "update", "wiki_page", str(page.id), reason=f"direct edit: {slug}")
+    edited_scope_type = page.scope_type or "global"
+    edited_scope_id = page.scope_id
+    await wiki_service.regenerate_index(db, scope_type=edited_scope_type, scope_id=edited_scope_id)
+    await wiki_service.append_log(
+        db,
+        f"Edited page: {page.title} ({slug}) → v{page.version} by {user.name or user.email}",
+        scope_type=edited_scope_type,
+        scope_id=edited_scope_id,
+    )
     await db.commit()
     await db.refresh(page)
 
-    backlinks = await wiki_service.get_backlinks(db, slug)
-    outlinks = await wiki_service.get_outlinks(db, slug)
+    backlinks = await wiki_service.get_backlinks(db, slug, page.scope_type, page.scope_id)
+    outlinks = await wiki_service.get_outlinks(db, slug, page.scope_type or "global", page.scope_id)
     return _detail(page, backlinks, outlinks)
 
 
@@ -446,8 +455,8 @@ async def rollback_wiki_page(
     await db.commit()
     await db.refresh(page)
 
-    backlinks = await wiki_service.get_backlinks(db, slug)
-    outlinks = await wiki_service.get_outlinks(db, slug)
+    backlinks = await wiki_service.get_backlinks(db, slug, page.scope_type, page.scope_id)
+    outlinks = await wiki_service.get_outlinks(db, slug, page.scope_type or "global", page.scope_id)
     return _detail(page, backlinks, outlinks)
 
 
@@ -567,9 +576,11 @@ async def get_wiki_graph(
 
     # Edges — return ALL on first batch (offset=0)
     if offset == 0:
-        edges = (await db.execute(
-            select(WikiLink.from_slug, WikiLink.to_slug)
+        edges_rows = (await db.execute(
+            select(WikiPage.slug.label("from_slug"), WikiLink.to_slug)
+            .join(WikiLink, WikiLink.from_page_id == WikiPage.id)
         )).all()
+        edges = edges_rows
     else:
         edges = []
 

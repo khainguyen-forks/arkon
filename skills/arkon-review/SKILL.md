@@ -1,7 +1,7 @@
 ---
 name: arkon-review
-description: "Review, approve, or reject pending wiki edit drafts in Arkon. Requires editor or admin role. Triggers on: review drafts, pending reviews, check draft queue, approve draft, reject draft, review wiki changes."
-allowed-tools: mcp__arkon__list_pending_drafts mcp__arkon__review_draft mcp__arkon__approve_draft mcp__arkon__reject_draft mcp__arkon__read_wiki_page
+description: "Review, approve, request changes on, or reject pending wiki edit drafts in Arkon. Requires editor or admin role. Triggers on: review drafts, pending reviews, check draft queue, approve draft, reject draft, request changes, send draft back, review wiki changes."
+allowed-tools: mcp__arkon__list_pending_drafts mcp__arkon__review_draft mcp__arkon__approve_draft mcp__arkon__reject_draft mcp__arkon__request_changes_on_draft mcp__arkon__read_wiki_page
 ---
 
 # arkon-review: Review Wiki Drafts
@@ -45,12 +45,22 @@ approve_draft(draft_id, reviewer_note="optional feedback to author")
 approve_draft(draft_id, edited_content_md="...", reviewer_note="approved with minor edits")
 ```
 
-**Reject:**
+**Request changes** (the draft is on the right track but needs fixes; preferred over reject when iteration is realistic):
+```
+request_changes_on_draft(draft_id, reviewer_note="20+ char explanation — what to change and why")
+```
+The draft moves to `needs_revision`; author can `resubmit_draft` after addressing the note. The original draft stays — `revision_round` increments each round and prior submissions are snapshotted for diffing.
+
+**Reject** (only when the proposal is fundamentally wrong — out of scope, factually broken, or duplicates an existing page):
 ```
 reject_draft(draft_id, reviewer_note="clear reason why — required")
 ```
 
-`reviewer_note` is **required** for rejections — the author needs to understand what to fix.
+`reviewer_note` is **required** for both reject and request_changes — the author needs to understand what to fix. **Prefer request_changes over reject** unless the proposal cannot be salvaged.
+
+**Conflict on approve**: if the page advanced past the draft's `base_version` while you were reviewing, `approve_draft` returns a conflict error. Re-call with `allow_conflict=true` to overwrite, or supply `edited_content_md` after merging the latest content yourself.
+
+**Self-approve is blocked**: the server rejects approve attempts where the reviewer is also the author. Ask another editor.
 
 ---
 

@@ -10,20 +10,40 @@ type Props = {
   drafts: DraftResponse[];
   onApproved: (draftId: string) => void;
   onRejected: (draftId: string) => void;
+  onChangesRequested?: (draftId: string) => void;
 };
 
-export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
+type ReviewerAction = "approve" | "reject" | "request_changes";
+
+const MIN_NOTE_LENGTH = 20;
+
+export function WikiDraftBanner({
+  drafts,
+  onApproved,
+  onRejected,
+  onChangesRequested,
+}: Props) {
   const [idx, setIdx] = React.useState(0);
   const [tab, setTab] = React.useState<"proposed" | "current">("proposed");
-  const [rejecting, setRejecting] = React.useState(false);
-  const [rejectNote, setRejectNote] = React.useState("");
+  const [actionMode, setActionMode] = React.useState<ReviewerAction | null>(null);
+  const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const draft = drafts[idx];
   if (!draft) return null;
 
+  const isNeedsRevision = draft.status === "needs_revision";
+  const isWithdrawn = draft.status === "withdrawn";
+  const hasConflict = draft.has_conflict;
+
   const total = drafts.length;
+
+  const resetForm = () => {
+    setActionMode(null);
+    setNote("");
+    setError(null);
+  };
 
   const handleApprove = async () => {
     setBusy(true);
@@ -31,10 +51,11 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
     try {
       await api(`/api/wiki/drafts/${draft.id}/approve`, {
         method: "POST",
-        body: {},
+        body: { allow_conflict: hasConflict ? true : undefined },
       });
       onApproved(draft.id);
       setIdx((i) => Math.max(0, i - 1));
+      resetForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Approve failed");
     } finally {
@@ -42,21 +63,31 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
     }
   };
 
-  const handleReject = async () => {
-    if (!rejectNote.trim()) return;
+  const handleNoteSubmit = async () => {
+    if (note.trim().length < MIN_NOTE_LENGTH) {
+      setError(`Please write at least ${MIN_NOTE_LENGTH} characters explaining your decision.`);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await api(`/api/wiki/drafts/${draft.id}/reject`, {
-        method: "POST",
-        body: { reviewer_note: rejectNote },
-      });
-      onRejected(draft.id);
-      setRejecting(false);
-      setRejectNote("");
+      if (actionMode === "reject") {
+        await api(`/api/wiki/drafts/${draft.id}/reject`, {
+          method: "POST",
+          body: { reviewer_note: note },
+        });
+        onRejected(draft.id);
+      } else if (actionMode === "request_changes") {
+        await api(`/api/wiki/drafts/${draft.id}/request-changes`, {
+          method: "POST",
+          body: { reviewer_note: note },
+        });
+        onChangesRequested?.(draft.id);
+      }
+      resetForm();
       setIdx((i) => Math.max(0, i - 1));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reject failed");
+      setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(false);
     }
@@ -69,20 +100,80 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
     year: "numeric",
   });
 
+  // Color palette differs by draft state so reviewers can scan the queue.
+  const palette = isNeedsRevision
+    ? {
+        wrap: "border-blue-300/60 bg-blue-50/80 dark:bg-blue-950/20 dark:border-blue-700/40",
+        icon: "edit_note",
+        iconClass: "text-blue-600 dark:text-blue-400",
+        text: "text-blue-900 dark:text-blue-200",
+        muted: "text-blue-700 dark:text-blue-400",
+        chip: "bg-blue-300/70 dark:bg-blue-700/50 text-blue-900 dark:text-blue-100",
+        chipHover: "text-blue-700 dark:text-blue-400 hover:bg-blue-100/60 dark:hover:bg-blue-800/30",
+        hover: "hover:bg-blue-200/60 dark:hover:bg-blue-800/40",
+        border: "border-blue-200/60 dark:border-blue-700/30",
+        tabBorder: "border-blue-300/70 dark:border-blue-700/40",
+        primaryBtn: "bg-blue-600 hover:bg-blue-700 text-white",
+      }
+    : {
+        wrap: "border-amber-300/60 bg-amber-50/80 dark:bg-amber-950/20 dark:border-amber-700/40",
+        icon: "pending",
+        iconClass: "text-amber-600 dark:text-amber-400",
+        text: "text-amber-900 dark:text-amber-200",
+        muted: "text-amber-700 dark:text-amber-400",
+        chip: "bg-amber-300/70 dark:bg-amber-700/50 text-amber-900 dark:text-amber-100",
+        chipHover: "text-amber-700 dark:text-amber-400 hover:bg-amber-100/60 dark:hover:bg-amber-800/30",
+        hover: "hover:bg-amber-200/60 dark:hover:bg-amber-800/40",
+        border: "border-amber-200/60 dark:border-amber-700/30",
+        tabBorder: "border-amber-300/70 dark:border-amber-700/40",
+        primaryBtn: "bg-amber-600 hover:bg-amber-700 text-white",
+      };
+
+  const headlineLabel = isNeedsRevision
+    ? `Waiting for ${authorLabel} to revise`
+    : isWithdrawn
+    ? `Withdrawn by ${authorLabel}`
+    : `Pending draft by ${authorLabel}`;
+
+  const notePrompt =
+    actionMode === "request_changes"
+      ? "Explain what the author should change before resubmitting…"
+      : "Tell the contributor why this draft was rejected…";
+
+  const noteLabel =
+    actionMode === "request_changes"
+      ? "Request changes — note to author (required)"
+      : "Rejection reason (required)";
+
   return (
-    <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 dark:bg-amber-950/20 dark:border-amber-700/40 overflow-hidden shadow-sm">
+    <div className={`rounded-xl border ${palette.wrap} overflow-hidden shadow-sm`}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-amber-200/60 dark:border-amber-700/30">
-        <span className="material-symbols-outlined text-amber-600 dark:text-amber-400" style={{ fontSize: 18 }}>
-          pending
+      <div className={`flex items-center gap-3 px-4 py-3 border-b ${palette.border}`}>
+        <span className={`material-symbols-outlined ${palette.iconClass}`} style={{ fontSize: 18 }}>
+          {palette.icon}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-            Pending draft by <span className="font-semibold">{authorLabel}</span>
-            <span className="font-normal text-amber-700 dark:text-amber-400"> · {dateLabel}</span>
+          <p className={`text-sm font-medium ${palette.text} flex flex-wrap items-center gap-2`}>
+            <span>{headlineLabel}</span>
+            <span className={`font-normal ${palette.muted}`}>· {dateLabel}</span>
+            {draft.revision_round > 0 && (
+              <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${palette.chip}`}>
+                round {draft.revision_round}
+              </span>
+            )}
+            {hasConflict && (
+              <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-destructive/15 text-destructive">
+                conflict — page advanced past v{draft.base_version ?? "?"} to v{draft.page_version}
+              </span>
+            )}
           </p>
           {draft.note && (
-            <p className="text-xs text-amber-700 dark:text-amber-400 truncate mt-0.5">"{draft.note}"</p>
+            <p className={`text-xs ${palette.muted} truncate mt-0.5`}>&ldquo;{draft.note}&rdquo;</p>
+          )}
+          {isNeedsRevision && draft.last_returned_note && (
+            <p className={`text-xs ${palette.muted} mt-1`}>
+              <span className="font-medium">Reviewer asked:</span> {draft.last_returned_note}
+            </p>
           )}
         </div>
 
@@ -93,16 +184,16 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
               type="button"
               onClick={() => setIdx((i) => Math.max(0, i - 1))}
               disabled={idx === 0}
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-amber-200/60 dark:hover:bg-amber-800/40 disabled:opacity-30 transition-colors"
+              className={`w-6 h-6 flex items-center justify-center rounded ${palette.hover} disabled:opacity-30 transition-colors`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>chevron_left</span>
             </button>
-            <span className="text-xs text-amber-700 dark:text-amber-400 tabular-nums">{idx + 1}/{total}</span>
+            <span className={`text-xs ${palette.muted} tabular-nums`}>{idx + 1}/{total}</span>
             <button
               type="button"
               onClick={() => setIdx((i) => Math.min(total - 1, i + 1))}
               disabled={idx === total - 1}
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-amber-200/60 dark:hover:bg-amber-800/40 disabled:opacity-30 transition-colors"
+              className={`w-6 h-6 flex items-center justify-center rounded ${palette.hover} disabled:opacity-30 transition-colors`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>chevron_right</span>
             </button>
@@ -118,9 +209,7 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
             type="button"
             onClick={() => setTab(t)}
             className={`px-3 py-1 rounded-md text-xs font-medium transition-colors capitalize ${
-              tab === t
-                ? "bg-amber-300/70 dark:bg-amber-700/50 text-amber-900 dark:text-amber-100"
-                : "text-amber-700 dark:text-amber-400 hover:bg-amber-100/60 dark:hover:bg-amber-800/30"
+              tab === t ? palette.chip : palette.chipHover
             }`}
           >
             {t === "proposed" ? "Proposed" : "Current page"}
@@ -134,26 +223,27 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
           draft.content_md.trim() ? (
             <WikiContent markdown={draft.content_md} />
           ) : (
-            <p className="text-sm text-amber-700/60 italic">Empty content.</p>
+            <p className={`text-sm ${palette.muted} italic`}>Empty content.</p>
           )
         ) : null}
       </div>
 
-      {/* Reject note field */}
-      {rejecting && (
+      {/* Reject / Request-changes note field */}
+      {actionMode === "reject" || actionMode === "request_changes" ? (
         <div className="px-4 pb-3">
-          <label className="block text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">
-            Rejection reason (required)
-          </label>
+          <label className={`block text-xs font-medium ${palette.text} mb-1`}>{noteLabel}</label>
           <textarea
-            value={rejectNote}
-            onChange={(e) => setRejectNote(e.target.value)}
-            rows={2}
-            placeholder="Tell the contributor why this draft was rejected…"
-            className="w-full rounded-lg border border-amber-300/70 dark:border-amber-700/40 bg-white/70 dark:bg-black/20 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/40 resize-none placeholder:text-amber-400/70"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder={notePrompt}
+            className={`w-full rounded-lg border ${palette.tabBorder} bg-white/70 dark:bg-black/20 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-current/20 resize-none placeholder:opacity-60`}
           />
+          <p className={`text-[11px] ${palette.muted} mt-1`}>
+            {note.trim().length}/{MIN_NOTE_LENGTH} characters minimum
+          </p>
         </div>
-      )}
+      ) : null}
 
       {error && (
         <p className="px-4 pb-2 text-xs text-destructive">{error}</p>
@@ -161,40 +251,58 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2 px-4 pb-3">
-        {rejecting ? (
+        {actionMode ? (
           <>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { setRejecting(false); setRejectNote(""); }}
+              onClick={resetForm}
               disabled={busy}
-              className="border-amber-300/60 dark:border-amber-700/40"
+              className={`border ${palette.tabBorder}`}
             >
               Cancel
             </Button>
             <Button
               size="sm"
-              variant="destructive"
-              onClick={handleReject}
-              disabled={busy || !rejectNote.trim()}
-              className="gap-1.5"
+              variant={actionMode === "reject" ? "destructive" : "default"}
+              onClick={handleNoteSubmit}
+              disabled={busy || note.trim().length < MIN_NOTE_LENGTH}
+              className={`gap-1.5 ${actionMode === "request_changes" ? palette.primaryBtn : ""}`}
             >
               {busy ? (
                 <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
               ) : (
-                <span className="material-symbols-outlined text-sm">cancel</span>
+                <span className="material-symbols-outlined text-sm">
+                  {actionMode === "reject" ? "cancel" : "edit_note"}
+                </span>
               )}
-              Confirm Reject
+              {actionMode === "reject" ? "Confirm Reject" : "Send back"}
             </Button>
           </>
+        ) : isNeedsRevision || isWithdrawn ? (
+          <p className={`text-xs ${palette.muted} italic`}>
+            {isNeedsRevision
+              ? "Waiting for the author to resubmit."
+              : "This draft is no longer in review."}
+          </p>
         ) : (
           <>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setRejecting(true)}
+              onClick={() => { setActionMode("request_changes"); setNote(""); }}
               disabled={busy}
-              className="border-amber-300/60 dark:border-amber-700/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-800/30"
+              className={`border ${palette.tabBorder} ${palette.text} ${palette.hover}`}
+            >
+              <span className="material-symbols-outlined text-sm mr-1">edit_note</span>
+              Request changes
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setActionMode("reject"); setNote(""); }}
+              disabled={busy}
+              className={`border ${palette.tabBorder} ${palette.text} ${palette.hover}`}
             >
               <span className="material-symbols-outlined text-sm mr-1">cancel</span>
               Reject
@@ -203,7 +311,7 @@ export function WikiDraftBanner({ drafts, onApproved, onRejected }: Props) {
               size="sm"
               onClick={handleApprove}
               disabled={busy}
-              className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+              className={`gap-1.5 ${palette.primaryBtn}`}
             >
               {busy ? (
                 <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>

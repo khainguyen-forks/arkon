@@ -5,6 +5,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.0] — 2026-05-19
+
+Contribute / review hardening, foundation pass. Adds a closed feedback loop
+between authors and reviewers (`needs_revision`), an in-app notification
+inbox, and a unified service for contribution state transitions across wiki
+drafts and skill contributions. Lays the backbone for the upcoming AI
+pre-review, diff view, and `propose_create_page` work in the next release.
+
+### Added
+
+- **`needs_revision` state for wiki drafts and skill contributions**: a
+  reviewer can now send a draft back with a note instead of being forced to
+  approve or reject. The author resubmits on the same draft —
+  `revision_round` increments and the prior submission is snapshotted to
+  the new `wiki_draft_rounds` table so reviewers can diff between rounds.
+- **`withdraw` action for authors**: an in-flight draft (pending or
+  needs_revision) can be retracted by its author without a reviewer touch.
+- **`ContributionService` (`app/services/contribution_service.py`)**:
+  thin state-machine wrapper with `WikiDraftAdapter` and
+  `SkillContributionAdapter`. Each lifecycle verb fires audit logs and
+  notifications uniformly so REST and MCP entry points behave the same.
+- **`NotificationService` + in-app inbox**: new `notifications` table,
+  `NotificationService` writer (sync DB inserts, audit_service pattern),
+  REST endpoints `GET /notifications`, `GET /notifications/unread-count`,
+  `POST /notifications/{id}/read`, `POST /notifications/read-all`.
+- **NotificationBell in the header**: badge + slide-in drawer with
+  mark-as-read controls; polls unread count every 30s.
+- **MCP tools for the new lifecycle**:
+  `request_changes_on_draft`, `resubmit_draft`, `withdraw_draft`. The
+  matching skills (`arkon-edit`, `arkon-review`) document the new flow.
+- **REST endpoints for wiki draft lifecycle**:
+  `POST /wiki/drafts/{id}/request-changes`,
+  `PATCH /wiki/drafts/{id}/content` (author resubmit),
+  `POST /wiki/drafts/{id}/withdraw`,
+  `GET /wiki/drafts/{id}/rounds` (per-round history).
+- **REST endpoints for skill contribution lifecycle**:
+  `POST /skill-contributions/{id}/request-changes`,
+  `POST /skill-contributions/{id}/resubmit`,
+  `POST /skill-contributions/{id}/withdraw`.
+- **WikiDraftBanner UX**: distinct palette + headline for
+  `needs_revision` vs `pending`, a “Request changes” button alongside
+  Approve / Reject, the reviewer’s return note surfaced inline, a
+  20-character minimum on rejection / request-changes notes, conflict
+  badge when `base_version < page.version`, and a round counter when
+  the draft has been through revisions.
+
+### Changed
+
+- **Skill contribution file edits no longer silently demote PENDING to
+  DRAFT.** Contributors must explicitly `withdraw` (or wait for a reviewer
+  to `request_changes`) before editing files on a contribution that is in
+  front of a reviewer. This closes the “draft moves underfoot mid-review”
+  hole flagged in the contribute/review code review.
+- **Notifications fire on every lifecycle event** — submit, approve,
+  reject, request_changes, resubmit, withdraw — across both REST and MCP
+  entry points.
+
+### Migrations
+
+- `024_contribution_lifecycle.py`: adds `revision_round` /
+  `last_returned_note` to `wiki_page_drafts` and `skill_contributions`,
+  creates `wiki_draft_rounds` (per-round snapshots) and `notifications`
+  (recipient-keyed inbox with `(recipient_id, read_at)` index for the
+  badge query).
+
+---
+
 ## [0.4.0] — 2026-05-18
 
 A scope-aware refresh of the Wiki UX. Every wiki page already lived in a
