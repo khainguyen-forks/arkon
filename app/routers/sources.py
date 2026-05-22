@@ -58,6 +58,8 @@ class SourceResponse(BaseModel):
     job_id: Optional[str] = None
     page_count: int = 0
     wiki_page_count: int = 0
+    extracted_token_count: Optional[int] = None
+    image_count: int = 0
     knowledge_type_id: Optional[uuid.UUID] = None
     knowledge_type_name: Optional[str] = None
     knowledge_type_color: Optional[str] = None
@@ -101,7 +103,14 @@ async def _wiki_page_count(session: AsyncSession, source_id: uuid.UUID) -> int:
     return (await session.execute(stmt)).scalar_one()
 
 
-def _to_response(source: Source, wiki_page_count: int = 0) -> SourceResponse:
+async def _image_count(session: AsyncSession, source_id: uuid.UUID) -> int:
+    """How many SourceImage rows exist for this source."""
+    from app.database.models import SourceImage
+    stmt = select(func.count()).select_from(SourceImage).where(SourceImage.source_id == source_id)
+    return (await session.execute(stmt)).scalar_one()
+
+
+def _to_response(source: Source, wiki_page_count: int = 0, image_count: int = 0) -> SourceResponse:
     # Extract departments from M2M relationship
     dept_ids = []
     dept_names = []
@@ -124,6 +133,8 @@ def _to_response(source: Source, wiki_page_count: int = 0) -> SourceResponse:
         job_id=source.job_id,
         page_count=len(source.page_offsets or []),
         wiki_page_count=wiki_page_count,
+        extracted_token_count=source.extracted_token_count,
+        image_count=image_count,
         knowledge_type_id=source.knowledge_type_id,
         knowledge_type_name=source.knowledge_type.name if source.knowledge_type else None,
         knowledge_type_color=source.knowledge_type.color if source.knowledge_type else None,
@@ -258,6 +269,7 @@ async def get_source(
         raise HTTPException(403, "Access denied")
 
     wiki_count = await _wiki_page_count(db, source_id)
+    img_count = await _image_count(db, source_id)
     download_url = None
     if source.minio_key:
         try:
@@ -266,7 +278,7 @@ async def get_source(
         except Exception:
             pass
 
-    base = _to_response(source, wiki_count)
+    base = _to_response(source, wiki_count, img_count)
     return SourceDetail(
         **base.model_dump(),
         full_text=source.full_text,
@@ -621,6 +633,52 @@ async def get_compilation_plan(
         "created_at": plan.created_at.isoformat(),
         "reviewed_at": plan.reviewed_at.isoformat() if plan.reviewed_at else None,
         "review_note": plan.review_note,
+    }
+
+
+@router.post("/sources/{source_id}/approve-extraction")
+async def approve_extraction(
+    source_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: Employee = require_permission("doc:edit"),
+):
+    """Resume the pipeline for a source paused at status='awaiting_approval'.
+
+    Triggered after a human reviews the extracted token count + image count and
+    decides to spend AI tokens on it. Enqueues caption_images_task (if images
+    exist) or ingest_map_reduce_task directly.
+    """
+    from app.worker import enqueue_post_extraction_pipeline
+
+    source = await db.get(Source, source_id)
+    if not source:
+        raise HTTPException(404, "Source not found")
+    if source.status != "awaiting_approval":
+        raise HTTPException(
+            400,
+            f"Source is not awaiting approval (status={source.status})",
+        )
+
+    has_images = (await _image_count(db, source_id)) > 0
+    job_id = await enqueue_post_extraction_pipeline(str(source_id), has_images=has_images)
+
+    source.status = "processing"
+    source.progress = 56
+    source.progress_message = (
+        "Captioning images before extraction..." if has_images
+        else "Extraction queued..."
+    )
+    if job_id:
+        source.job_id = job_id
+
+    await log_audit(db, user, "approve", "source_extraction", str(source.id))
+    await db.commit()
+
+    return {
+        "status": "processing",
+        "job_id": job_id,
+        "has_images": has_images,
+        "token_count": source.extracted_token_count,
     }
 
 

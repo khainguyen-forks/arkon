@@ -124,6 +124,10 @@ class Source(Base):
     progress: Mapped[int] = mapped_column(Integer, default=0)
     progress_message: Mapped[Optional[str]] = mapped_column(String(500))
     job_id: Mapped[Optional[str]] = mapped_column(String(200))
+    extracted_token_count: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True,
+        comment="tiktoken cl100k_base count of full_text. Used by upload gate.",
+    )
     pipeline_strategy: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True,
         comment="single_pass | standard | hierarchical — set by Phase 0 triage",

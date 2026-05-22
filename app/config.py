@@ -77,6 +77,14 @@ class Settings(BaseSettings):
         default=True,
         description="If True, REFINE uses multi-pass writer when source > budget; if False, falls back to single-pass with tiered selection",
     )
+    auto_approve_extraction_threshold_tokens: int = Field(
+        default=200_000,
+        description="Doc <= this many tokens after extraction auto-proceeds. Larger docs pause at status='awaiting_approval' for human review.",
+    )
+    extraction_approval_ttl_hours: int = Field(
+        default=24,
+        description="Orphan sources stuck in 'awaiting_approval' longer than this are auto-deleted by cleanup cron.",
+    )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

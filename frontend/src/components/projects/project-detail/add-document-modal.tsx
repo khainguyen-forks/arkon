@@ -42,9 +42,9 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-4o": 128_000,
   "claude-4": 1_000_000,
 };
-// 60% of context for source text (same as backend)
-const SOURCE_BUDGET_RATIO = 0.60;
-const DEFAULT_CONTEXT = 200_000; // conservative default
+// 85% of context for source text (matches backend writer.py Tier 1)
+const SOURCE_BUDGET_RATIO = 0.85;
+const DEFAULT_CONTEXT = 200_000;
 
 function estimateTokens(file: File): number {
   const ext = "." + file.name.split(".").pop()?.toLowerCase();

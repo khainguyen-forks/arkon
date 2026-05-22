@@ -27,6 +27,7 @@ import { fileIcons, getFileExt } from "./utils";
 import { StatusDot } from "./status-dot";
 import { EditSourceDialog } from "./edit-source-dialog";
 import { PlanReviewDialog } from "./plan-review-dialog";
+import { ExtractionReviewDialog } from "./extraction-review-dialog";
 
 type Props = {
   sources: Source[];
@@ -58,6 +59,7 @@ export function KnowledgeTable({
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [editSource, setEditSource] = React.useState<Source | null>(null);
   const [reviewPlanSource, setReviewPlanSource] = React.useState<Source | null>(null);
+  const [reviewExtractionSource, setReviewExtractionSource] = React.useState<Source | null>(null);
   const [retryingIds, setRetryingIds] = React.useState<Set<string>>(new Set());
   const [searchInput, setSearchInput] = React.useState(search);
 
@@ -275,6 +277,14 @@ export function KnowledgeTable({
                             Review Plan
                           </DropdownMenuItem>
                         )}
+                        {source.status === "awaiting_approval" && (
+                          <DropdownMenuItem onClick={() => setReviewExtractionSource(source)}>
+                            <span className="material-symbols-outlined mr-2 text-orange-500" style={{ fontSize: 16 }}>
+                              scale
+                            </span>
+                            Review Size
+                          </DropdownMenuItem>
+                        )}
                         {source.status === "error" && (
                           <DropdownMenuItem
                             onClick={() => handleRetry(source.id)}
@@ -371,6 +381,14 @@ export function KnowledgeTable({
           source={reviewPlanSource}
           onClose={() => setReviewPlanSource(null)}
           onDone={() => { setReviewPlanSource(null); onRefresh(); }}
+        />
+      )}
+
+      {reviewExtractionSource && (
+        <ExtractionReviewDialog
+          source={reviewExtractionSource}
+          onClose={() => setReviewExtractionSource(null)}
+          onDone={() => { setReviewExtractionSource(null); onRefresh(); }}
         />
       )}
     </div>
