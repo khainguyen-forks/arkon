@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         default=False,
         description="If True, compilation plans are auto-approved without human review",
     )
+    mrp_multipass_writer_enabled: bool = Field(
+        default=True,
+        description="If True, REFINE uses multi-pass writer when source > budget; if False, falls back to single-pass with tiered selection",
+    )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

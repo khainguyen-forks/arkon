@@ -510,12 +510,11 @@ async def run_planning_call(
     total_extracted_items = len(canonical_entities) + len(canonical_concepts)
     
     if strategy == "single_pass":
-        # Usually 1 page per 2-3 items, minimum 3, maximum 15
-        target_pages = max(3, min(15, total_extracted_items // 2))
+        target_pages = max(3, min(30, total_extracted_items // 2))
     elif strategy == "standard":
-        target_pages = max(8, min(30, total_extracted_items // 3))
+        target_pages = max(8, min(80, total_extracted_items // 3))
     else:
-        target_pages = max(15, min(60, total_extracted_items // 3))
+        target_pages = max(15, min(200, total_extracted_items // 3))
 
     kt_context = kt_name or "(no specific knowledge type)"
     if kt_desc:
@@ -540,8 +539,8 @@ async def run_planning_call(
     sorted_entities = sorted(canonical_entities, key=lambda x: x.get("mention_count", 0), reverse=True)
     sorted_concepts = sorted(canonical_concepts, key=lambda x: x.get("mention_count", 0), reverse=True)
 
-    entities_summary = "\n".join(_fmt_entity(e) for e in sorted_entities[:100]) or "  (none)"
-    concepts_summary = "\n".join(_fmt_concept(c) for c in sorted_concepts[:100]) or "  (none)"
+    entities_summary = "\n".join(_fmt_entity(e) for e in sorted_entities[:300]) or "  (none)"
+    concepts_summary = "\n".join(_fmt_concept(c) for c in sorted_concepts[:300]) or "  (none)"
 
     kb_lines = []
     for name, rec in reconciliation.items():
