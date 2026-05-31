@@ -1116,8 +1116,8 @@ async def regenerate_hot_cache(
     contradiction_rows = (await session.execute(contradiction_stmt)).all()
 
     # 4. Format context for LLM
-    recent_prose = "\n".join(f"- [[{r.slug}|{r.title}]] (Trạng thái: {r.status}, Cập nhật: {r.updated_at.strftime('%Y-%m-%d %H:%M') if r.updated_at else 'N/A'})" for r in recent_rows) if recent_prose := recent_rows else "- Không có cập nhật gần đây."
-    seed_prose = "\n".join(f"- [[{r.slug}|{r.title}]]" for r in seed_rows) if seed_prose := seed_rows else "- Không có trang seed nào."
+    recent_prose = "\n".join(f"- [[{r.slug}|{r.title}]] (Trạng thái: {r.status}, Cập nhật: {r.updated_at.strftime('%Y-%m-%d %H:%M') if r.updated_at else 'N/A'})" for r in recent_rows) if recent_rows else "- Không có cập nhật gần đây."
+    seed_prose = "\n".join(f"- [[{r.slug}|{r.title}]]" for r in seed_rows) if seed_rows else "- Không có trang seed nào."
     
     contradiction_items = []
     for r in contradiction_rows:
