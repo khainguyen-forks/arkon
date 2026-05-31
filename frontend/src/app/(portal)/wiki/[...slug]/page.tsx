@@ -632,16 +632,12 @@ export default function WikiPageViewer() {
                             className="max-w-full max-h-[600px] object-contain rounded-lg border shadow-md"
                           />
                         </div>
-                      ) : sourceData.full_text ? (
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2 px-6 py-3 border-b border-border bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider shrink-0">
-                            <span className="material-symbols-outlined text-base">chrome_reader_mode</span>
-                            Nội dung văn bản được chiết xuất ({sourceData.file_name?.split('.').pop()?.toUpperCase()})
-                          </div>
-                          <div className="p-8 max-h-[650px] overflow-y-auto bg-background/50 leading-relaxed prose prose-sahara dark:prose-invert max-w-none">
-                            <WikiContent markdown={sourceData.full_text} linkSuffix={scopeLinkSuffix} />
-                          </div>
-                        </div>
+                      ) : sourceData.file_name?.toLowerCase().match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/) ? (
+                        <iframe
+                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(sourceData.download_url)}`}
+                          className="w-full h-[700px] bg-background border-none"
+                          title={sourceData.title || sourceData.file_name}
+                        />
                       ) : (
                         <div className="flex flex-col items-center justify-center p-12 text-center text-sm text-muted-foreground gap-3 min-h-[300px]">
                           <span className="material-symbols-outlined text-4xl text-muted-foreground/60">draft</span>

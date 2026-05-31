@@ -601,7 +601,7 @@ async def regenerate_index(
     stmt = (
         select(WikiPage.slug, WikiPage.title, WikiPage.page_type, WikiPage.summary)
         .where(
-            WikiPage.slug.notin_([INDEX_SLUG, LOG_SLUG]),
+            WikiPage.slug.notin_([INDEX_SLUG, LOG_SLUG, HOT_SLUG]),
             _scope_filter(scope_type, scope_id),
         )
         .order_by(WikiPage.page_type, WikiPage.title)

@@ -205,10 +205,7 @@ async def run_commit_phase(
                 logger.error(f"MRP COMMIT failed for '{pr.slug}' scope={scope_type}: {exc}")
 
         await wiki_service.regenerate_index(session, scope_type=scope_type, scope_id=scope_id)
-        try:
-            await wiki_service.regenerate_hot_cache(session, scope_type=scope_type, scope_id=scope_id)
-        except Exception as hot_exc:
-            logger.warning(f"MRP COMMIT regenerate_hot_cache failed for scope={scope_type}: {hot_exc}")
+        # regenerate_hot_cache is disabled to save resources and LLM costs
 
         log_entry = (
             f"MRP: ingested '{source.title or source.file_name or str(source.id)}': "
